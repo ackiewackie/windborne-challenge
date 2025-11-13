@@ -1,65 +1,88 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+const Map = dynamic(() => import("./SimpleMap"), { ssr: false });
+
+// Mock balloon data as fallback
+const mockBalloons = [
+  [37.7749, -122.4194, 12.5], // San Francisco
+  [40.7128, -74.0060, 8.2],   // New York
+  [51.5074, -0.1278, 15.1],   // London
+  [35.6762, 139.6503, 9.8],   // Tokyo
+  [-33.8688, 151.2093, 11.3], // Sydney
+  [48.8566, 2.3522, 7.9],     // Paris
+  [52.5200, 13.4050, 13.7],   // Berlin
+  [55.7558, 37.6176, 6.4],    // Moscow
+  [39.9042, 116.4074, 14.2],  // Beijing
+  [-23.5505, -46.6333, 10.1], // São Paulo
+  [19.4326, -99.1332, 16.8],  // Mexico City
+  [28.6139, 77.2090, 5.5],    // Delhi
+  [1.3521, 103.8198, 12.9],   // Singapore
+  [25.2048, 55.2708, 8.7],    // Dubai
+  [-26.2041, 28.0473, 11.6],  // Johannesburg
+].map(([lat, lon, alt]) => ({ lat, lon, alt }));
 
 export default function Home() {
+  const [balloons, setBalloons] = useState([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const urls = Array.from({ length: 24 }, (_, i) =>
+          `https://a.windbornesystems.com/treasure/${i.toString().padStart(2, "0")}.json`
+        );
+
+        const responses = await Promise.allSettled(
+          urls.map(async url => {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+          })
+        );
+
+        const clean = responses
+          .filter(r => r.status === "fulfilled" && Array.isArray(r.value))
+          .flatMap(r => r.value)
+          .filter(arr => Array.isArray(arr) && arr.length >= 2)
+          .map(([lat, lon, alt]) => ({
+            lat: parseFloat(lat),
+            lon: parseFloat(lon),
+            alt: parseFloat(alt) || 0,
+          }))
+          .filter(b => !isNaN(b.lat) && !isNaN(b.lon));
+
+        setBalloons(clean.length > 0 ? clean : mockBalloons);
+      } catch (err) {
+        setBalloons(mockBalloons);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-900 text-white">
+      <h1 className="text-4xl font-extrabold text-cyan-300 mb-3">
+        WindBorne Constellation Dashboard
+      </h1>
+      <p className="text-gray-400 mb-6 text-center max-w-2xl">
+        Live positions of WindBorne weather balloons combined with Open-Meteo data.
+        Hover over any marker to see temperature readings for that location.
+      </p>
+      <div className="w-full max-w-5xl">
+        <div className="mb-4 text-center">
+          <span className="bg-cyan-800 px-3 py-1 rounded-full text-sm">
+            🎈 {balloons.length} balloons tracked
+          </span>
+
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        <Map balloons={balloons} />
+      </div>
+      <footer className="mt-8 text-sm text-gray-500">
+        Built by Anjali Kok • Powered by WindBorne + Open-Meteo
+      </footer>
+    </main>
   );
 }
